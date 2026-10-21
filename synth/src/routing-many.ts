@@ -1,3 +1,4 @@
+import {permuteSeries} from './optimization.ts';
 import {placeRsTriggers} from './library/rs-trigger-layout.ts';
 import {placePorChains} from './library/por-layout.ts';
 import {createBoard,connect,score} from './board.ts';
@@ -35,13 +36,14 @@ export function routeMany(netlist:Netlist):Layout {
     for(let x=left;x<left+3;x++)for(let y=2+row*4;y<=4+row*4;y++)pads[x+y*W]=owner;
   }
   let best:Layout|undefined;
-  for(let attempt=0;attempt<48||(!best&&attempt<768);attempt++){
+  for(let attempt=0;attempt<56||(!best&&attempt<768);attempt++){
+    const routedTransistors=permuteSeries(netlist,attempt<48?0:attempt-47);
     const board=createBoard(),fixed=new Int16Array(pads),types=new Uint8Array(N),terminals=names.map(()=>[] as number[]),used=new Set<number>();
     for(const binding of netlist.bindings){const net=netId.get(binding.net??binding.name);if(net!==undefined)terminals[net].push(id(binding.point));}
     const placed=placePorChains(netlist,board,fixed,types,terminals,netId);
     placed.push(...placeRsTriggers(netlist,board,fixed,types,terminals,netId));
     const preset=new Set(placed.map(p=>p.id));
-    for(const t of netlist.transistors){
+    for(const t of routedTransistors){
       if(preset.has(t.id))continue;
       const input=netlist.bindings.find(b=>(b.net??b.name)===t.gate)?.point ?? (terminals[netId.get(t.gate)!].length?pos(terminals[netId.get(t.gate)!][0]):outputPoint(t.gate)),output=outputPoint(t.drain);
       const sourcePoints=t.source==='VCC'?[[2,3],[41,3],[2,23],[41,23]] as Point[]:terminals[netId.get(t.source)!].map(pos);

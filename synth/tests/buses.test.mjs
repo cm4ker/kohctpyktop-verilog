@@ -58,7 +58,6 @@ test('wire diagnostics reject multiple drivers, cycles, widths, ranges and unsup
  'wire [3:0] v={pin1,pin2,pin3,pin4}; assign pin6=|v[4],pin7=&v;',
  'wire [3:0] v={pin1,pin2,pin3,pin4}; assign pin6=|v[0:2],pin7=&v;',
  'wire [0:3] v={pin1,pin2,pin3,pin4}; assign pin6=|v[3:1],pin7=&v;',
- 'assign pin6=pin1||pin2,pin7=~pin1;',
  'assign pin6=pin1&&pin2,pin7=~pin1;',
  'assign pin6=^pin1,pin7=~pin1;',
  'assign pin6=~(pin1|pin2),pin7=~pin1;',

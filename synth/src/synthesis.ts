@@ -1,3 +1,4 @@
+import {optimizeNets,recognizeCells} from './optimization.ts';
 import {elaborateTransistor} from './library/transistor.ts';
 import {elaborateRsTrigger} from './library/rs-trigger.ts';
 import type {RsTrigger} from './library/rs-trigger.ts';
@@ -18,7 +19,7 @@ export function pinPoint(number: number): Point {
   if (!Number.isInteger(number) || number < 1 || number > 8) throw Error('Номер контакта должен быть от 1 до 8.');
   return number <= 4 ? [2, 7 + (number - 1) * 4] : [41, 7 + (8 - number) * 4];
 }
-type Bit = {kind:'constant';value:boolean;span:Span} | {kind:'input';name:string;span:Span} | {kind:'not';argument:Bit;span:Span} | {kind:'and'|'or';operands:Bit[];span:Span};
+type Bit = {kind:'xor';left:Bit;right:Bit;span:Span} | {kind:'constant';value:boolean;span:Span} | {kind:'input';name:string;span:Span} | {kind:'not';argument:Bit;span:Span} | {kind:'and'|'or';operands:Bit[];span:Span};
 function combine(kind:'and'|'or',operands:Bit[],span:Span):Bit {
   const flat=operands.flatMap(bit=>bit.kind===kind?bit.operands:[bit]);
   const absorbing=kind==='or';
@@ -30,6 +31,7 @@ function combine(kind:'and'|'or',operands:Bit[],span:Span):Bit {
 }
 function negate(bit:Bit,span:Span):Bit {
   if(bit.kind==='constant')return {...bit,value:!bit.value};
+  if(bit.kind==='xor')return {...bit,right:negate(bit.right,span)};
   if(bit.kind==='not')return bit.argument;
   if(bit.kind==='input')return {kind:'not',argument:bit,span};
   return combine(bit.kind==='and'?'or':'and',bit.operands.map(b=>negate(b,span)),span);
@@ -39,7 +41,7 @@ function targets(expression:Expression):Identifier[]{
   if(expression.kind==='Concatenation')return expression.elements.flatMap(targets);
   throw new Diagnostic('Слева ожидается имя выхода или конкатенация выходов.',expression.span);
 }
-export function synthesize(ast: Module): Netlist {
+export function synthesize(ast: Module,options:{optimize?:boolean}={}): Netlist {
   ast=flattenModules(ast);
   if (ast.name !== 'root') throw new Diagnostic('Верхний модуль должен называться root.', ast.span);
   const seen = new Set<string>();
@@ -135,6 +137,7 @@ export function synthesize(ast: Module): Netlist {
       }
       case 'BinaryExpression':{
         const left=resolve(expr.left),right=resolve(expr.right);
+        if(expr.operator==='||')return [combine('or',[...left,...right],expr.span)];
         if(expr.operator==='<<'){
           // Left operand width is preserved; bits shifted out are discarded.
           return left.map((_,output)=>{
@@ -151,6 +154,7 @@ export function synthesize(ast: Module): Netlist {
           const other=right[i];
           if(bit.kind==='constant')return bit.value?negate(other,expr.span):other;
           if(other.kind==='constant')return other.value?negate(bit,expr.span):bit;
+          if(options.optimize)return {kind:'xor',left:bit,right:other,span:expr.span};
           return combine('or',[
             combine('and',[bit,negate(other,expr.span)],expr.span),
             combine('and',[negate(bit,expr.span),other],expr.span)
@@ -163,7 +167,20 @@ export function synthesize(ast: Module): Netlist {
   for(const wire of ast.wires)wireBits(wire.name);
   const driven = new Set<string>(modulePins), transistors: Transistor[] = [...porTransistors], seriesGroups: SeriesGroup[] = [],parallelGroups:ParallelGroup[]=[];
   let internal=0;
+  const logicNets=new Map<Bit,string>();
+  function signal(bit:Bit):string {
+    if(bit.kind==='input')return bit.name;
+    if(bit.kind==='constant'&&bit.value)return 'VCC';
+    if(logicNets.has(bit))return logicNets.get(bit)!;
+    const name=`$logic${++internal}`;logicNets.set(bit,name);emit(bit,'VCC',name);return name;
+  }
   function emit(bit:Bit,source:string,drain:string):void {
+    if(bit.kind==='xor'){
+      const a=signal(bit.left),b=signal(bit.right),on=`$xor${++internal}`,off=`$xor${++internal}`;
+      for(const [type,s,g,d]of [['N',source,a,on],['P',source,a,off],['N',off,b,drain],['P',on,b,drain]] as const)transistors.push({id:`${type}${transistors.length+1}`,type,source:s,gate:g,drain:d});
+      return;
+    }
+
     if(bit.kind==='constant'){if(bit.value&&drain!==source)aliases.set(drain,source);return;}
     if(bit.kind==='input'||bit.kind==='not'){
       if(bit.kind==='not'&&bit.argument.kind!=='input')throw new Diagnostic('Пока инвертируются только входные биты, а не результат логической операции.',bit.span);
@@ -207,5 +224,8 @@ export function synthesize(ast: Module): Netlist {
   for(const c of delayLines){c.output=root(c.output);c.input=root(c.input);}
   for(const c of porChains){c.output=root(c.output);if(c.preOutput)c.preOutput=root(c.preOutput);}
   for(const g of parallelGroups){g.source=root(g.source);g.drain=root(g.drain);}
-  return {module:ast.name,bindings,transistors,seriesGroups,parallelGroups,porChains,delayLines,rsTriggers,wires:ast.wires.map(w=>({name:w.name,msb:w.msb,lsb:w.lsb,width:Math.abs(w.msb-w.lsb)+1}))};
+  const net:Netlist={module:ast.name,bindings,transistors,seriesGroups,parallelGroups,porChains,delayLines,rsTriggers,wires:ast.wires.map(w=>({name:w.name,msb:w.msb,lsb:w.lsb,width:Math.abs(w.msb-w.lsb)+1}))};
+  if(options.optimize)optimizeNets(net);
+  recognizeCells(net);
+  return net;
 }

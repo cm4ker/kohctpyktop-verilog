@@ -19,5 +19,5 @@ export function parseWithLibrary(source:string,files:Record<string,string>):Modu
       definitions.push(mod);
     }
   }
-  return {...ast,definitions};
+  return {...ast,definitions,strictLibrary:true};
 }

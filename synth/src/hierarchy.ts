@@ -1,3 +1,4 @@
+import {specializeModule} from './parameters.ts';
 import {Diagnostic} from './parser.ts';
 import type {Module,Expression,Identifier,AssignmentTarget} from './parser.ts';
 
@@ -6,12 +7,13 @@ export function flattenModules(top:Module):Module {
   const definitions=new Map<string,Module>();
   for(const mod of top.definitions??[top]){
     if(definitions.has(mod.name))throw new Diagnostic(`Duplicate module: ${mod.name}.`,mod.span);
-    if(['por','delay_line','rs_trigger','transistor_n','transistor_p'].includes(mod.name))throw new Diagnostic(`Reserved library module: ${mod.name}.`,mod.span);
+    if(['transistor_n','transistor_p'].includes(mod.name))throw new Diagnostic(`Reserved library module: ${mod.name}.`,mod.span);
     definitions.set(mod.name,mod);
   }
   const result:Module={...top,definitions:undefined,wires:[],instances:[],assignments:[]};
-  function expand(mod:Module,path:string,ports:Map<string,string>,stack:string[]):void {
-    if(stack.includes(mod.name))throw new Diagnostic(`Recursive module instantiation: ${[...stack,mod.name].join(' -> ')}.`,mod.span);
+  function expand(definition:Module,path:string,ports:Map<string,string>,stack:string[],parameters=new Map<string,number>()):void {
+    const mod=specializeModule(definition,parameters),signature=mod.name+JSON.stringify([...parameters]);
+    if(stack.length>128||stack.includes(signature))throw new Diagnostic(`Recursive module instantiation: ${[...stack,mod.name].join(' -> ')}.`,mod.span);
     const names=new Map(ports),declared=new Set<string>();
     for(const declaration of [...mod.ports,...mod.wires,...mod.instances]){
       if(declared.has(declaration.name))throw new Diagnostic(`Duplicate declaration: ${declaration.name}.`,declaration.span);
@@ -50,11 +52,11 @@ export function flattenModules(top:Module):Module {
         return {...c,signal:{kind:'Identifier' as const,name,span:c.signal.span}};
       });
       if(!child){
-        if(!['por','delay_line','rs_trigger','transistor_n','transistor_p'].includes(instance.module))throw new Diagnostic(`Unknown module: ${instance.module}.`,instance.span);
+        if(!(top.strictLibrary?['transistor_n','transistor_p']:['por','delay_line','rs_trigger','transistor_n','transistor_p']).includes(instance.module))throw new Diagnostic(`Unknown module: ${instance.module}.`,instance.span);
         result.instances.push({...instance,name:path+instance.name,connections:connections.map(c=>({...c,signal:rename(c.signal as Identifier)}))});
         continue;
       }
-      if(instance.parameters.length)throw new Diagnostic('Parameters on user modules are not supported yet.',instance.span);
+      const parameterValues=new Map<string,number>();for(const p of instance.parameters){if(parameterValues.has(p.name))throw new Diagnostic('Duplicate parameter: '+p.name,p.span);parameterValues.set(p.name,p.value);}
       const connected=new Map<string,string>();
       for(const connection of connections){
         const c={...connection,signal:connection.signal as Identifier};
@@ -66,8 +68,8 @@ export function flattenModules(top:Module):Module {
         if(port.direction==='output'&&mod.ports.some(p=>p.name===c.signal.name&&p.direction==='input'))throw new Diagnostic(`Cannot drive input ${c.signal.name}.`,c.span);
         connected.set(c.name,rename(c.signal).name);
       }
-      for(const port of child.ports)if(!connected.has(port.name))throw new Diagnostic(`Missing port connection: ${instance.module}.${port.name}.`,instance.span);
-      expand(child,path+instance.name+'.',connected,[...stack,mod.name]);
+      for(const port of child.ports)if(!connected.has(port.name)){if(child.name==='por'&&port.name==='pre_out'){const name=path+instance.name+'.$pre_out';result.wires.push({kind:'WireDeclaration',name,msb:0,lsb:0,span:port.span});connected.set(port.name,name);continue;}throw new Diagnostic(`Missing port connection: ${instance.module}.${port.name}.`,instance.span);}
+      expand(child,path+instance.name+'.',connected,[...stack,signature],parameterValues);
     }
   }
   expand(top,'',new Map(top.ports.map(p=>[p.name,p.name])),[]);
