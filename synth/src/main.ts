@@ -1,3 +1,4 @@
+import {libraryManager} from './library-manager.ts';
 import {parseWithLibrary} from './user-library.ts';
 import {librarySources} from './browser-library.ts';
 import {EditorView,basicSetup} from 'codemirror';
@@ -104,10 +105,11 @@ let revision=0,layout:Layout|undefined,legacy='';
 function invalidate(){revision++;layout=undefined;legacy='';copy.disabled=download.disabled=true;element<HTMLButtonElement>('apply').disabled=true;board.classList.add('stale');element('metrics').textContent='Нужно пересинтезировать';element('ast').textContent='';element('ir').textContent='';element('netlist').textContent='Исходный код изменён.';element('bindings').textContent='';element('manual').hidden=true;status.className='';status.textContent='Код изменён. Выполните синтез.';}
 let stored:string|null=null;try{stored=localStorage.getItem('kohctpyktop-verilog-source');}catch{}
 const view=new EditorView({parent:element('editor'),doc:stored??example,extensions:[basicSetup,StreamLanguage.define(verilog),syntaxHighlighting(defaultHighlightStyle),EditorView.contentAttributes.of({'aria-label':'Исходный код Verilog'}),EditorView.theme({'&':{height:'300px',fontSize:'14px'},'.cm-scroller':{fontFamily:'Consolas, monospace'},'.cm-content':{padding:'16px 0'},'.cm-gutters':{backgroundColor:'#f0f3f5',border:'none'}}),EditorView.updateListener.of(update=>{if(update.docChanged){invalidate();try{localStorage.setItem('kohctpyktop-verilog-source',update.state.doc.toString());}catch{}}})]});
+const library=libraryManager(element('library-manager'),librarySources,invalidate);
 async function compile(){
   invalidate();const current=revision;status.textContent='Синтез и разводка…';
   try{
-    const ast=parseWithLibrary(view.state.doc.toString(),librarySources),netlist=synthesize(ast),result=route(netlist);
+    const ast=parseWithLibrary(view.state.doc.toString(),library.sources()),netlist=synthesize(ast,{optimize:true}),result=route(netlist);
     const code=await exportLegacy(result.board);if(current!==revision)return;
     layout=result;legacy=code;renderBoard(board,result.board);board.classList.remove('stale');
     const nCount=netlist.transistors.filter(t=>t.type==='N').length;
