@@ -1,6 +1,4 @@
 import {permuteSeries} from './optimization.ts';
-import {placeRsTriggers} from './library/rs-trigger-layout.ts';
-import {placePorChains} from './library/por-layout.ts';
 import {createBoard,connect,score} from './board.ts';
 import type {Netlist,Point} from './synthesis.ts';
 import type {Layout} from './routing.ts';
@@ -36,15 +34,13 @@ export function routeMany(netlist:Netlist):Layout {
     for(let x=left;x<left+3;x++)for(let y=2+row*4;y<=4+row*4;y++)pads[x+y*W]=owner;
   }
   let best:Layout|undefined;
-  for(let attempt=0;attempt<56||(!best&&attempt<768);attempt++){
+  for(let attempt=0;attempt<96||(!best&&attempt<768);attempt++){
+    const localPlacement=attempt>=56&&attempt%2===0;
     const routedTransistors=permuteSeries(netlist,attempt<48?0:attempt-47);
     const board=createBoard(),fixed=new Int16Array(pads),types=new Uint8Array(N),terminals=names.map(()=>[] as number[]),used=new Set<number>();
     for(const binding of netlist.bindings){const net=netId.get(binding.net??binding.name);if(net!==undefined)terminals[net].push(id(binding.point));}
-    const placed=placePorChains(netlist,board,fixed,types,terminals,netId);
-    placed.push(...placeRsTriggers(netlist,board,fixed,types,terminals,netId));
-    const preset=new Set(placed.map(p=>p.id));
+    const placed:{id:string;point:Point}[]=[];
     for(const t of routedTransistors){
-      if(preset.has(t.id))continue;
       const input=netlist.bindings.find(b=>(b.net??b.name)===t.gate)?.point ?? (terminals[netId.get(t.gate)!].length?pos(terminals[netId.get(t.gate)!][0]):outputPoint(t.gate)),output=outputPoint(t.drain);
       const sourcePoints=t.source==='VCC'?[[2,3],[41,3],[2,23],[41,23]] as Point[]:terminals[netId.get(t.source)!].map(pos);
       let choice:{site:number;mid:Point;ports:Point[];cost:number}|undefined;
@@ -54,7 +50,7 @@ export function routeMany(netlist:Netlist):Layout {
         const ports=offsets.map(([x,y]):Point=>[mid[0]+x,mid[1]+y]);
         if([mid,...ports].some(p=>fixed[id(p)+N]!==-1))continue;
         const spread:Point=[7+6*(placed.length%6),4+6*(Math.floor(placed.length/6)%4)];
-        const cost=(attempt>=48?20*distance(mid,spread):0)+distance(ports[1],output)+distance(ports[2],input)+.3*Math.min(...(sourcePoints.length?sourcePoints:[output]).map(p=>distance(ports[0],p)))+random()*(attempt>=48?48:attempt?18:0);
+        const cost=localPlacement? (3*distance(ports[2],input)+3*Math.min(...(sourcePoints.length?sourcePoints:[input]).map(p=>distance(ports[0],p)))+.25*distance(ports[1],output)+random()*(attempt%4)*5) : (attempt>=48?20*distance(mid,spread):0)+distance(ports[1],output)+distance(ports[2],input)+.3*Math.min(...(sourcePoints.length?sourcePoints:[output]).map(p=>distance(ports[0],p)))+random()*(attempt>=48?48:attempt?18:0);
         if(!choice||cost<choice.cost)choice={site,mid,ports,cost};
       }
       if(!choice)throw Error('Недостаточно места для транзисторов.');
@@ -75,6 +71,10 @@ export function routeMany(netlist:Netlist):Layout {
     const occupied=new Int16Array(fixed),order=names.map((_,i)=>i),paths:{net:string;cells:Point[]}[]=[];
     // Vary net order to avoid committing the same blocking route every time.
     if(attempt)for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+    if(localPlacement)order.sort((a,b)=>{
+      const span=(n:number)=>{const ps=terminals[n].map(pos);if(!ps.length)return 0;return Math.max(...ps.map(p=>p[0]))-Math.min(...ps.map(p=>p[0]))+Math.max(...ps.map(p=>p[1]))-Math.min(...ps.map(p=>p[1]));};
+      return span(a)-span(b);
+    });
     let failed=false;
     for(const net of order){
       const tree=new Set<number>();for(let p=0;p<N;p++)if(pads[p]===net&&(net===0?((Math.floor(p/W)>=2&&Math.floor(p/W)<=4)||(Math.floor(p/W)>=22&&Math.floor(p/W)<=24)):tree.size===0))tree.add(p);

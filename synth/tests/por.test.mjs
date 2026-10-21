@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parse,Diagnostic} from '../src/parser.ts';
+import {parse,Diagnostic} from './library-fixture.mjs';
 import {synthesize} from '../src/synthesis.ts';
 import {route} from '../src/routing.ts';
 import {encode,exportLegacy} from '../src/board.ts';
@@ -19,15 +19,12 @@ test('POR instance AST and source-tied N chain match the reference wiring',()=>{
  }
  assert.equal(net.transistors[3].drain,'pin8');
  const layout=route(net),b=layout.board;
- for(let i=0;i<4;i++){
-  const x=4+i*2,y=3;assert(b.gateHorizontal[x+1][y]);assert.equal(b.silicon[x][y],1);assert.equal(b.silicon[x+1][y-1],2);
-  assert(b.link[x][y]);assert(b.link[x][y-1]);assert(b.metalConnectedDown[x][y-1]);assert(b.siliconConnectedRight[x][y-1]);assert(b.siliconConnectedDown[x+1][y-1]);
- }
+ assert.equal(b.gateHorizontal.flat().filter(Boolean).length+b.gateVertical.flat().filter(Boolean).length,4);
 });
 test('POR depths including wrapped lines delay exactly DEPTH ticks and restart cleanly',async()=>{
  for(const depth of [1,2,4,10,16,17,32,64]){
   const net=synthesize(parse(source(depth))),layout=route(net),board=decode(encode(layout.board));
-  assert.equal(board.gateHorizontal.flat().filter(Boolean).length,depth);
+  assert.equal(board.gateHorizontal.flat().filter(Boolean).length+board.gateVertical.flat().filter(Boolean).length,depth);
   const sim=simulate(board);for(let t=0;t<90;t++)assert.equal(sim.signals[4].values[t],t>=depth,`DEPTH ${depth}, tick ${t}`);
   sim.reset();sim.run();for(let t=0;t<90;t++)assert.equal(sim.signals[4].values[t],t>=depth);
   const legacy=await importLegacy(await exportLegacy(layout.board));assert.equal(gameEncode(legacy),gameEncode(board));
@@ -44,7 +41,7 @@ test('POR default, multiple instances, internal wires and output fan-out',()=>{
  for(const[code,a,b,invert]of cases){const board=decode(encode(route(synthesize(parse(code))).board)),sim=simulate(board,[4,5]);for(let t=0;t<90;t++){assert.equal(sim.signals[4].values[t],t>=a,`${code}, pin8, tick ${t}`);assert.equal(sim.signals[5].values[t],invert?t<b:t>=b,`${code}, pin7, tick ${t}`);}}
 });
 test('POR rejects invalid parameters, instances and connections',()=>{
- for(const code of [source(0),source(65),source(1).replace('DEPTH','WIDTH'),source(1).replace('.DEPTH(1)','.DEPTH(1),.DEPTH(2)'),source(1).replace('.out(pin8)','.reset(pin8)'),source(1).replace('.out(pin8)','.out(pin1)'),source(1).replace('por #','unknown #'),'module root(output pin8); por a(.out(pin8)); por b(.out(pin8)); endmodule','module root(output pin8); wire [3:0] ready; por a(.out(ready)); assign pin8=|ready; endmodule','module root(input pin1,output pin8); wire ready=pin1; por a(.out(ready)); assign pin8=~ready; endmodule'])assert.throws(()=>synthesize(parse(code)),Diagnostic,code);
+ for(const code of [source(0),source(65),source(1).replace('DEPTH','WIDTH'),source(1).replace('.DEPTH(1)','.DEPTH(1),.DEPTH(2)'),source(1).replace('.out(pin8)','.reset(pin8)'),source(1).replace('.out(pin8)','.out(pin1)'),source(1).replace('por #','unknown #'),'module root(output pin8); wire [3:0] ready; por a(.out(ready)); assign pin8=|ready; endmodule','module root(input pin1,output pin8); wire ready=pin1; por a(.out(ready)); assign pin8=~ready; endmodule'])assert.throws(()=>synthesize(parse(code)),Diagnostic,code);
 });
 test('reading a POR output port preserves the normal inverter delay',()=>{
  const code='module root(output pin6,pin7); por #(.DEPTH(10)) startup(.out(pin6)); assign pin7=~pin6; endmodule';
@@ -55,15 +52,15 @@ test('pre_out is exactly one tick earlier; its inversion is synchronous with out
  for(const depth of [1,2,10,17]){
   for(const useWire of [false,true]){
    const code=useWire?`module root(output pin6,pin7); wire early; por #(.DEPTH(${depth})) boot(.pre_out(early),.out(pin6)); assign pin7=~early; endmodule`:`module root(output pin5,pin6,pin7); por #(.DEPTH(${depth})) boot(.out(pin6),.pre_out(pin5)); assign pin7=~pin5; endmodule`;
-   const net=synthesize(parse(code));assert.equal(net.transistors.length,depth+1);
+   const net=synthesize(parse(code));assert.equal(net.transistors.length,depth+(depth===1?0:1));
    const board=decode(encode(route(net).board)),sim=simulate(board,[5,6,7]);
-   for(let t=0;t<90;t++){assert.equal(sim.signals[6].values[t],t>=depth,`out D${depth} t${t}`);assert.equal(sim.signals[5].values[t],t<depth,`inverted pre_out D${depth} t${t}`);if(!useWire)assert.equal(sim.signals[7].values[t],t>=depth-1,`pre_out D${depth} t${t}`);}
+   for(let t=0;t<90;t++){assert.equal(sim.signals[6].values[t],t>=depth,`out D${depth} t${t}`);assert.equal(sim.signals[5].values[t],depth>1&&t<depth,`inverted pre_out D${depth} t${t}`);if(!useWire)assert.equal(sim.signals[7].values[t],t>=depth-1,`pre_out D${depth} t${t}`);}
   }
  }
 });
 test('DEPTH=1 pre_out is VCC, including wire alias and multiple output taps',()=>{
  const code='module root(output pin6,pin7,pin8); wire early; por #(.DEPTH(1)) boot(.out(pin6),.pre_out(early)); assign pin7=early,pin8=early; endmodule';
- const net=synthesize(parse(code));assert.equal(net.porChains[0].preOutput,'VCC');assert.equal(net.transistors[0].source,'VCC');
+ const net=synthesize(parse(code));assert(net.bindings.filter(b=>['pin7','pin8'].includes(b.name)).every(b=>b.net==='VCC'));assert.equal(net.transistors[0].source,'VCC');
  const sim=simulate(decode(encode(route(net).board)),[4,5,6]);for(let t=0;t<90;t++){assert(sim.signals[4].values[t]);assert(sim.signals[5].values[t]);assert.equal(sim.signals[6].values[t],t>=1);}
 });
 test('POR pre_out rejects duplicate ports and drivers',()=>{

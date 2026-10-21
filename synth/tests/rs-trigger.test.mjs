@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parse,Diagnostic} from '../src/parser.ts';
+import {parse,Diagnostic} from './library-fixture.mjs';
 import {synthesize} from '../src/synthesis.ts';
 import {route} from '../src/routing.ts';
 import {encode,exportLegacy} from '../src/board.ts';
@@ -14,12 +14,11 @@ function simulate(board,patterns,outputs,length=100){
  for(const [i,pattern]of Object.entries(patterns))sim.signals[Number(i)].pattern=pattern;
  sim.run();return sim;
 }
-test('RS preserves two independent N/P branches and the compact feedback cell',async()=>{
+test('RS preserves two independent N/P branches through the generic router',async()=>{
  const {net,layout,board}=build(source);assert.equal(net.rsTriggers.length,1);assert.equal(net.transistors.length,4);
  const [sn,hn,sp,hp]=net.transistors;assert.equal(sn.gate,'pin1');assert.equal(hn.gate,'pin8');assert.equal(sp.gate,'pin2');assert.equal(hp.gate,'pin2');
  assert.equal(sp.source,sn.drain);assert.equal(hp.source,hn.drain);assert.notEqual(sp.source,hp.source);assert.equal(sp.drain,hp.drain);
- const points=layout.transistors.map(t=>t.point);const [x,y]=points[0];assert.deepEqual(points,[[x,y],[x+1,y],[x-1,y+3],[x+1,y+3]]);
- assert.equal(board.gateVertical.flat().filter(Boolean).length,4);
+ assert.equal(board.gateHorizontal.flat().filter(Boolean).length+board.gateVertical.flat().filter(Boolean).length,4);
  assert.equal(gameEncode(await importLegacy(await exportLegacy(layout.board))),gameEncode(board));
 });
 test('set, hold, reset, simultaneous S/R and one-tick pulses; reset restarts state',()=>{

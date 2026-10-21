@@ -1,12 +1,7 @@
+import type {PorChain,DelayLine,RsTrigger} from './cell-types.ts';
 import {optimizeNets,recognizeCells} from './optimization.ts';
 import {elaborateTransistor} from './library/transistor.ts';
-import {elaborateRsTrigger} from './library/rs-trigger.ts';
-import type {RsTrigger} from './library/rs-trigger.ts';
 import {flattenModules} from './hierarchy.ts';
-import {elaborateDelayLine} from './library/delay-line.ts';
-import type {DelayLine} from './library/delay-line.ts';
-import {elaboratePor} from './library/por.ts';
-import type {PorChain} from './library/por.ts';
 import { Diagnostic } from './parser.ts';
 import type { Module, Expression, Identifier, Span } from './parser.ts';
 export type Point = readonly [number, number];
@@ -61,6 +56,11 @@ export function synthesize(ast: Module,options:{optimize?:boolean}={}): Netlist 
     const name=assignment.target.name;if(drivers.has(name))throw new Diagnostic(`Повторное назначение wire ${name}.`,assignment.span);
     drivers.set(name,assignment.expression);return false;
   });
+  const outputDrivers=new Map<string,{expression:Expression;index:number;width:number}>();
+  for(const assignment of outputAssignments){const outputs=targets(assignment.target);outputs.forEach((out,index)=>{
+    if(outputDrivers.has(out.name))throw new Diagnostic('Повторное назначение выхода '+out.name,out.span);
+    outputDrivers.set(out.name,{expression:assignment.expression,index,width:outputs.length});
+  });}
   const transistorNets=new Set<string>();
   const moduleNets=new Set<string>(),modulePins=new Set<string>(),porChains:PorChain[]=[],porTransistors:Transistor[]=[];
   const rsTriggers:RsTrigger[]=[];
@@ -68,22 +68,17 @@ export function synthesize(ast: Module,options:{optimize?:boolean}={}): Netlist 
   const aliases=new Map<string,string>();
   for(const instance of ast.instances){
     if(seen.has(instance.name))throw new Diagnostic('Повторное имя экземпляра: '+instance.name,instance.span);seen.add(instance.name);
-    const delayed=instance.module==='delay_line'?elaborateDelayLine(instance):undefined;
-    const triggered=instance.module==='rs_trigger'?elaborateRsTrigger(instance):undefined;
-    const primitive=['transistor_n','transistor_p'].includes(instance.module)?elaborateTransistor(instance):undefined;
-    const expanded=primitive??triggered??delayed??elaboratePor(instance);
+    const primitive=elaborateTransistor(instance);
+    const expanded=primitive;
     for(const connection of expanded.connections){
     const name=connection.signal,wire=declarations.get(name);
-    if(!wire&&!bindings.some(b=>b.name===name&&b.direction==='output'))throw new Diagnostic('Выход POR подключается к выходному порту или скалярному wire: '+name,instance.span);
-    if(wire&&wire.msb!==wire.lsb)throw new Diagnostic('Выход POR подключается к скалярному wire.',wire.span);
+    if(!wire&&!bindings.some(b=>b.name===name&&b.direction==='output'))throw new Diagnostic('Сток транзистора подключается к выходному порту или скалярному wire: '+name,instance.span);
+    if(wire&&wire.msb!==wire.lsb)throw new Diagnostic('Сток транзистора подключается к скалярному wire.',wire.span);
     if((moduleNets.has(name)&&!(primitive&&transistorNets.has(name)))||drivers.has(name))throw new Diagnostic('Повторное назначение '+name,instance.span);
     moduleNets.add(name);if(primitive)transistorNets.add(name);if(!wire)modulePins.add(name);
     if(name!==connection.net)aliases.set(name,connection.net);
     }
-    if(primitive)delayInputs.push(...primitive.inputs);
-    else if(triggered){rsTriggers.push(triggered.latch);delayInputs.push(...triggered.inputs);}
-    else if(delayed){delayLines.push(delayed.chain);delayInputs.push(delayed.input);}
-    else if('chain' in expanded)porChains.push(expanded.chain);
+    delayInputs.push(...primitive.inputs);
     porTransistors.push(...expanded.transistors);
   }
   const root=(name:string):string=>aliases.has(name)?root(aliases.get(name)!):name;
@@ -104,6 +99,11 @@ export function synthesize(ast: Module,options:{optimize?:boolean}={}): Netlist 
       case 'NumberLiteral':return [...expr.bits].map(b=>({kind:'constant',value:b==='1',span:expr.span}));
       case 'Identifier':{
         if(declarations.has(expr.name))return wireBits(expr.name);
+        if(!moduleNets.has(expr.name)&&outputDrivers.has(expr.name)){
+          if(visiting.has(expr.name))throw new Diagnostic('Циклическое назначение выхода '+expr.name,expr.span);
+          const driver=outputDrivers.get(expr.name)!;visiting.add(expr.name);const bits=resolve(driver.expression);visiting.delete(expr.name);
+          if(bits.length!==driver.width)widthError(driver.width,bits.length,expr.span);return [bits[driver.index]];
+        }
         if(!moduleNets.has(expr.name)&&!bindings.some(b=>b.name===expr.name&&b.direction==='input'))throw new Diagnostic(`${expr.name} должен быть объявлен как input или wire.`,expr.span);
         return [{kind:'input',name:expr.name,span:expr.span}];
       }
@@ -211,6 +211,7 @@ export function synthesize(ast: Module,options:{optimize?:boolean}={}): Netlist 
     outputs.forEach((output,i)=>{
       if(!bindings.some(b=>b.name===output.name&&b.direction==='output'))throw new Diagnostic(`${output.name} должен быть объявлен как output.`,output.span);
       if(driven.has(output.name))throw new Diagnostic(`Повторное назначение выхода ${output.name}.`,output.span);driven.add(output.name);
+      if(materializedInputs.has(output.name))return;
       if(values[i].kind==='input'&&moduleNets.has(values[i].name)){const source=root(values[i].name);if(source==='VCC')aliases.set(output.name,'VCC');else aliases.set(source,output.name);return;}
       if(values[i].kind==='input'){if(output.name!==values[i].name)aliases.set(output.name,values[i].name);return;}
       emit(values[i],'VCC',output.name);

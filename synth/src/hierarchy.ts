@@ -42,7 +42,7 @@ export function flattenModules(top:Module):Module {
       const child=definitions.get(instance.module);
       const connections=instance.connections.map(c=>{
         if(c.signal.kind==='Identifier')return c;
-        const direction=child?.ports.find(p=>p.name===c.name)?.direction??((instance.module==='delay_line'&&c.name==='in')||(instance.module==='rs_trigger'&&['r','s'].includes(c.name))||(['transistor_n','transistor_p'].includes(instance.module)&&['s','g'].includes(c.name))?'input':'output');
+        const direction=child?.ports.find(p=>p.name===c.name)?.direction??((['transistor_n','transistor_p'].includes(instance.module)&&['s','g'].includes(c.name))?'input':'output');
         if(direction!=='input')throw new Diagnostic('A constant can only connect to an input port.',c.span);
         if(c.signal.width!==1)throw new Diagnostic('Input port requires a one-bit constant.',c.span);
         const name=`$constant.${instance.name}.${c.name}`;
@@ -52,7 +52,7 @@ export function flattenModules(top:Module):Module {
         return {...c,signal:{kind:'Identifier' as const,name,span:c.signal.span}};
       });
       if(!child){
-        if(!(top.strictLibrary?['transistor_n','transistor_p']:['por','delay_line','rs_trigger','transistor_n','transistor_p']).includes(instance.module))throw new Diagnostic(`Unknown module: ${instance.module}.`,instance.span);
+        if(!['transistor_n','transistor_p'].includes(instance.module))throw new Diagnostic(`Unknown module: ${instance.module}.`,instance.span);
         result.instances.push({...instance,name:path+instance.name,connections:connections.map(c=>({...c,signal:rename(c.signal as Identifier)}))});
         continue;
       }
@@ -68,7 +68,7 @@ export function flattenModules(top:Module):Module {
         if(port.direction==='output'&&mod.ports.some(p=>p.name===c.signal.name&&p.direction==='input'))throw new Diagnostic(`Cannot drive input ${c.signal.name}.`,c.span);
         connected.set(c.name,rename(c.signal).name);
       }
-      for(const port of child.ports)if(!connected.has(port.name)){if(child.name==='por'&&port.name==='pre_out'){const name=path+instance.name+'.$pre_out';result.wires.push({kind:'WireDeclaration',name,msb:0,lsb:0,span:port.span});connected.set(port.name,name);continue;}throw new Diagnostic(`Missing port connection: ${instance.module}.${port.name}.`,instance.span);}
+      for(const port of child.ports)if(!connected.has(port.name)){if(port.direction==='output'){const name=path+instance.name+'.$unused.'+port.name;result.wires.push({kind:'WireDeclaration',name,msb:0,lsb:0,span:port.span});connected.set(port.name,name);continue;}throw new Diagnostic(`Missing port connection: ${instance.module}.${port.name}.`,instance.span);}
       expand(child,path+instance.name+'.',connected,[...stack,signature],parameterValues);
     }
   }

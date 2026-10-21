@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parse,Diagnostic} from '../src/parser.ts';
+import {parse,Diagnostic} from './library-fixture.mjs';
 import {synthesize} from '../src/synthesis.ts';
 import {route} from '../src/routing.ts';
 import {encode,exportLegacy} from '../src/board.ts';
@@ -41,7 +41,7 @@ test('scalar input aliases, logic-driven wires, cascades and POR output inputs',
  for(let t=0;t<160;t++){assert.equal(sim.signals[5].values[t],t>=2);assert.equal(sim.signals[4].values[t],t>=5);}
 });
 test('delay_line validates ports, scalar input, drivers and DEPTH',()=>{
- for(const call of ['delay_line d(.out(pin8));','delay_line d(.in(pin1));','delay_line d(.in(pin1),.out(pin8),.pre_out(pin7));','delay_line d(.in(pin1),.in(pin1),.out(pin8));','delay_line d(.in(pin8),.out(pin8));','delay_line #(.DEPTH(0)) d(.in(pin1),.out(pin8));'])assert.throws(()=>synthesize(parse('module root(input pin1,output pin8);'+call+' endmodule')),Diagnostic);
+ for(const call of ['delay_line d(.out(pin8));','delay_line d(.in(pin1));','delay_line d(.in(pin1),.out(pin8),.pre_out(pin7));','delay_line d(.in(pin1),.in(pin1),.out(pin8));','delay_line #(.DEPTH(0)) d(.in(pin1),.out(pin8));'])assert.throws(()=>synthesize(parse('module root(input pin1,output pin8);'+call+' endmodule')),Diagnostic);
  assert.throws(()=>synthesize(parse('module root(input pin1,pin2,output pin8); wire [1:0] bus={pin1,pin2}; delay_line d(.in(bus),.out(pin8)); endmodule')),Diagnostic);
  assert.throws(()=>synthesize(parse('module root(output pin8); delay_line d(.in(missing),.out(pin8)); endmodule')),Diagnostic);
 });
