@@ -128,7 +128,7 @@ async function compile(){
     element('bindings').textContent=netlist.bindings.map(b=>`${b.name} · ${b.direction} · (${b.point.join(', ')})`).join('   /   ');
     copy.disabled=download.disabled=false;element<HTMLButtonElement>('apply').disabled=!levelId;status.className='success';status.textContent='Готово. Схему можно перенести в игру.';
     document.documentElement.dataset.ready='true';
-  }catch(error){if(current!==revision)return;status.className='error';if(error instanceof Diagnostic){status.textContent=`Строка ${error.span.line}, столбец ${error.span.column}: ${error.message}`;view.dispatch({selection:{anchor:Math.min(error.span.start,view.state.doc.length)}});}else status.textContent=error instanceof Error?error.message:String(error);}
+  }catch(error){if(current!==revision)return;status.className='error';if(error instanceof Diagnostic){status.textContent=`${error.span.source?error.span.source.split('/').pop()+': ':''}Строка ${error.span.line}, столбец ${error.span.column}: ${error.message}`;if(!error.span.source)view.dispatch({selection:{anchor:Math.min(error.span.start,view.state.doc.length)}});}else status.textContent=error instanceof Error?error.message:String(error);}
 }
 element('compile').addEventListener('click',()=>void compile());
 view.dom.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();void compile();}});

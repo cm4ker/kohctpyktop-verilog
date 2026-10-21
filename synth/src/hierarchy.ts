@@ -40,6 +40,8 @@ export function flattenModules(top:Module):Module {
     for(const a of mod.assignments)result.assignments.push({...a,target:expr(a.target) as AssignmentTarget,expression:expr(a.expression)});
     for(const instance of mod.instances){
       const child=definitions.get(instance.module);
+      const primitive=['transistor_n','transistor_p'].includes(instance.module);
+      if(!child&&!primitive)throw new Diagnostic(`Модуль ${instance.module} не найден. Включите его в библиотеке или добавьте определение в код.`,instance.span);
       const connections=instance.connections.map(c=>{
         if(c.signal.kind==='Identifier')return c;
         const direction=child?.ports.find(p=>p.name===c.name)?.direction??((['transistor_n','transistor_p'].includes(instance.module)&&['s','g'].includes(c.name))?'input':'output');
@@ -52,7 +54,6 @@ export function flattenModules(top:Module):Module {
         return {...c,signal:{kind:'Identifier' as const,name,span:c.signal.span}};
       });
       if(!child){
-        if(!['transistor_n','transistor_p'].includes(instance.module))throw new Diagnostic(`Unknown module: ${instance.module}.`,instance.span);
         result.instances.push({...instance,name:path+instance.name,connections:connections.map(c=>({...c,signal:rename(c.signal as Identifier)}))});
         continue;
       }

@@ -20,6 +20,10 @@ try {
  await page.selectOption('#speed','10000');await page.click('#run');await page.locator('#result.pass').waitFor();
  await page.click('#open-synth');
  const toggles=frame.locator('#library-manager input[type=checkbox]');assert.equal(await toggles.count(),4);for(let i=0;i<4;i++)assert.equal(await toggles.nth(i).isChecked(),false);
+ await frame.getByRole('checkbox',{name:'Включить por.v',exact:true}).check();
+ await frame.locator('.examples-menu summary').click();await frame.locator('#example-por').click();await frame.locator('#status.error').waitFor();
+ assert.match(await frame.locator('#status').innerText(),/por\.v:.*delay_line/);
+ await frame.getByRole('checkbox',{name:'Включить delay_line.v',exact:true}).check();await frame.locator('#compile').click();await frame.locator('#status.success').waitFor();
  await frame.locator('.examples-menu summary').click();await frame.locator('#example-edge').click();await frame.locator('#status.error').waitFor();
  await frame.getByRole('checkbox',{name:'Включить positive_edge_detector.v',exact:true}).check();await frame.locator('#compile').click();await frame.locator('#status.success').waitFor();
  await frame.getByRole('button',{name:'positive_edge_detector.v Системный',exact:true}).click();

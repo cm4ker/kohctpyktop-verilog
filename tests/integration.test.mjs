@@ -44,6 +44,15 @@ test('level templates preserve physical pin numbering and library state validate
  for(const level of levels){const ast=parse(moduleTemplate(level));for(const port of ast.ports){const n=Number(port.name.slice(3)),pin=level.pins[n<=4?n-1:12-n];assert.equal(port.direction,pin.output?'output':'input');}}
  assert.throws(()=>validateLibrary({version:1,users:[{}],enabledSystem:[]}));assert.deepEqual(validateLibrary({version:1,users:[],enabledSystem:[]}).users,[]);
 });
+test('POR reports a disabled delay_line dependency before checking constant ports',async()=>{
+ const files=await systemLibrary(),por=Object.keys(files).find(name=>name.endsWith('/por.v'));
+ const source="module root(output pin6, output pin7); wire early; por #(.DEPTH(10)) startup(.out(pin6),.pre_out(early)); assign pin7=~early; endmodule";
+ assert.throws(()=>synthesize(parseWithLibrary(source,{[por]:files[por]})),error=>error instanceof Diagnostic&&error.message.includes('delay_line')&&error.span.source===por&&error.span.line===6);
+ const net=synthesize(parseWithLibrary(source,files),{optimize:true});assert.equal(net.transistors.length,11);
+ const board=decode(encode(route(net).board));board.mainCanvasLock=true;
+ const sim=new Simulation(board,{id:'POR',length:30,pins:Array.from({length:8},(_,i)=>({name:`p${i}`,output:i===5||i===6,blocks:[0,0,0]}))});sim.run();
+ for(let t=0;t<30;t++){assert.equal(sim.signals[6].values[t],t>=10);assert.equal(sim.signals[5].values[t],t<10);}
+});
 test('latest solutions.v variants meet the real level grading threshold',async()=>{
  const report=await verifySolutions();assert(report.passed,JSON.stringify(report.results.filter(r=>r.required&&!r.passed)));assert.equal(report.results.filter(r=>r.required).length,11);assert.equal(report.absent.length,8);
 });
