@@ -104,21 +104,22 @@ let levelId:string|undefined;
 let revision=0,layout:Layout|undefined,legacy='';
 function invalidate(){revision++;layout=undefined;legacy='';copy.disabled=download.disabled=true;element<HTMLButtonElement>('apply').disabled=true;board.classList.add('stale');element('metrics').textContent='Нужно пересинтезировать';element('ast').textContent='';element('ir').textContent='';element('netlist').textContent='Исходный код изменён.';element('bindings').textContent='';element('manual').hidden=true;status.className='';status.textContent='Код изменён. Выполните синтез.';}
 let stored:string|null=null;try{stored=localStorage.getItem('kohctpyktop-verilog-source');}catch{}
-const view=new EditorView({parent:element('editor'),doc:stored??example,extensions:[basicSetup,StreamLanguage.define(verilog),syntaxHighlighting(defaultHighlightStyle),EditorView.contentAttributes.of({'aria-label':'Исходный код Verilog'}),EditorView.theme({'&':{height:'300px',fontSize:'14px'},'.cm-scroller':{fontFamily:'Consolas, monospace'},'.cm-content':{padding:'16px 0'},'.cm-gutters':{backgroundColor:'#f0f3f5',border:'none'}}),EditorView.updateListener.of(update=>{if(update.docChanged){invalidate();try{localStorage.setItem('kohctpyktop-verilog-source',update.state.doc.toString());}catch{}}})]});
+let needsTemplate=!stored;
+const view=new EditorView({parent:element('editor'),doc:stored??'module root ();\n\nendmodule\n',extensions:[basicSetup,StreamLanguage.define(verilog),syntaxHighlighting(defaultHighlightStyle),EditorView.contentAttributes.of({'aria-label':'Исходный код Verilog'}),EditorView.theme({'&':{height:'300px',fontSize:'14px'},'.cm-scroller':{fontFamily:'Consolas, monospace'},'.cm-content':{padding:'16px 0'},'.cm-gutters':{backgroundColor:'#f0f3f5',border:'none'}}),EditorView.updateListener.of(update=>{if(update.docChanged){invalidate();try{localStorage.setItem('kohctpyktop-verilog-source',update.state.doc.toString());}catch{}}})]});
 const library=libraryManager(element('library-manager'),librarySources,invalidate);
 async function compile(){
   invalidate();const current=revision;status.textContent='Синтез и разводка…';
   try{
     const ast=parseWithLibrary(view.state.doc.toString(),library.sources()),netlist=synthesize(ast,{optimize:true}),result=route(netlist);
     const code=await exportLegacy(result.board);if(current!==revision)return;
-    layout=result;legacy=code;renderBoard(board,result.board);board.classList.remove('stale');
+    layout=result;legacy=code;element('board-empty').hidden=true;renderBoard(board,result.board);board.classList.remove('stale');
     const nCount=netlist.transistors.filter(t=>t.type==='N').length;
     const pCount=netlist.transistors.length-nCount;
     element('metrics').textContent=`${result.area} клеток · N: ${nCount} · P: ${pCount}`;
     element('ast').textContent=JSON.stringify(ast,null,2);
     element('ir').textContent=JSON.stringify(netlist,null,2);
     element('netlist').textContent=netlist.transistors.map(t=>`${t.id} · ${t.type}-транзистор\n${t.source} ──[ ${t.id} ]── ${t.drain}\nЗатвор: ${t.gate}`).join('\n\n')
-      + netlist.seriesGroups.map(group=>`\n\n${group.id}: ${group.transistors.join(' ↔ ')}\nПерестановка допустима; пока не применяется.`).join('');
+      + netlist.seriesGroups.map(group=>`\n\n${group.id}: ${group.transistors.join(' ↔ ')}\nПерестановка допустима при разводке.`).join('');
     element('netlist').textContent+=netlist.parallelGroups.map(group=>`\n\n${group.id}: ${group.transistors.join(' ∥ ')}\nПараллельные ветви: ${group.source} → ${group.drain}`).join('');
     element('netlist').textContent+=netlist.porChains.map(chain=>`\n\n${chain.instance}: POR, DEPTH=${chain.depth}\nVCC → ${chain.transistors.join(' → ')} → ${chain.output}\nЗатвор каждой ступени соединён с её входом. Перестановка запрещена.`).join('');
     element('netlist').textContent+=netlist.porChains.filter(c=>c.preOutput).map(c=>`\n${c.instance}.pre_out → ${c.preOutput}: на один такт раньше out.`).join('');
@@ -134,22 +135,25 @@ view.dom.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&e
 element('example').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:example}});void compile();});
 element('example-and').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:andExample}});void compile();});
 element('example-bus').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:busExample}});void compile();});
-element('example-por').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:porExample}});void compile();});
-element('example-modules').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:modulesExample}});void compile();});
+element('example-por').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:porExample} });void compile();});
+element('example-modules').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:modulesExample} });void compile();});
 element('example-mux').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:muxExample}});void compile();});
 element('example-decoder').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:decoderExample}});void compile();});
 element('example-adder').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:adderExample}});void compile();});
-element('example-rs').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:rsExample}});void compile();});
-element('example-edge').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:edgeExample}});void compile();});
-element('example-delay').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:delayExample}});void compile();});
+element('example-rs').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:rsExample} });void compile();});
+element('example-edge').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:edgeExample} });void compile();});
+element('example-delay').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:delayExample} });void compile();});
 copy.addEventListener('click',async()=>{if(!layout)return;const code=legacy;try{await navigator.clipboard.writeText(code);status.className='success';status.textContent='Код скопирован. В игре откройте «Сохранение» → «Вставить код».';}catch{element('manual').hidden=false;(element('manual') as HTMLDetailsElement).open=true;const area=element<HTMLTextAreaElement>('export-code');area.value=code;area.focus();area.select();status.textContent='Выделенный код можно скопировать вручную: Ctrl+C.';}});
 download.addEventListener('click',()=>{if(!layout)return;const url=URL.createObjectURL(new Blob([encode(layout.board)+'\n'],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='root.kohctpyktop.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 window.addEventListener('message',event=>{
  if(event.origin!==location.origin||event.source!==parent||event.data?.type!=='kohctpyktop:level')return;
  levelId=event.data.levelId;
- if(typeof event.data.template==='string')view.dispatch({changes:{from:0,to:view.state.doc.length,insert:event.data.template}});
+ if(typeof event.data.template==='string'&&(event.data.replace||needsTemplate)){needsTemplate=false;view.dispatch({changes:{from:0,to:view.state.doc.length,insert:event.data.template}});status.textContent='Контакты готовы. Добавьте свою схему и выполните синтез.';if(!board.hasChildNodes())element('metrics').textContent='Синтез ещё не выполнен';}
+ element<HTMLButtonElement>('new-module').disabled=false;
  element<HTMLButtonElement>('apply').disabled=!layout||!levelId;
 });
 element('apply').addEventListener('click',()=>{if(layout&&levelId)parent.postMessage({type:'kohctpyktop:apply',levelId,board:encode(layout.board)},location.origin);});
+element('new-module').addEventListener('click',()=>parent.postMessage({type:'kohctpyktop:template'},location.origin));
+for(const button of Array.from(document.querySelectorAll('.examples-options button')))button.addEventListener('click',()=>{(button.closest('details') as HTMLDetailsElement).open=false;});
 parent.postMessage({type:'kohctpyktop:ready'},location.origin);
-void compile();
+status.textContent='Напишите код и выполните синтез. Шаблон содержит только контакты уровня.';

@@ -130,13 +130,13 @@ async function start(){
 start().catch(e=>{status('Ошибка запуска: '+e.message);console.error(e);});
 
 const synthDialog=$('#synth-dialog'),synthFrame=$('#synth-frame');
-function synthContext(template=false){synthFrame.contentWindow.postMessage({type:'kohctpyktop:level',levelId:levels[index].id,template:template?moduleTemplate(levels[index]):undefined},location.origin);}
+function synthContext(template=false){synthFrame.contentWindow.postMessage({type:'kohctpyktop:level',levelId:levels[index].id,template:moduleTemplate(levels[index]),replace:template},location.origin);}
 $('#open-synth').onclick=()=>{$('#synth-level').textContent=levels[index].id+' · '+levels[index].title;synthDialog.showModal();synthContext();};
-$('#new-module').onclick=()=>synthContext(true);
 $('#close-synth').onclick=()=>synthDialog.close();
 window.addEventListener('message',async event=>{
  if(event.origin!==location.origin||event.source!==synthFrame.contentWindow)return;
  if(event.data?.type==='kohctpyktop:ready')synthContext();
+ if(event.data?.type==='kohctpyktop:template')synthContext(true);
  if(event.data?.type==='kohctpyktop:apply'){
   if(event.data.levelId!==levels[index].id){status('Уровень изменился. Откройте синтезатор из нужного уровня.');return;}
   await importText(event.data.board);synthDialog.close();
