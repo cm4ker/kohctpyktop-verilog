@@ -1,4 +1,4 @@
-﻿import {Canvas} from './canvas.js';
+import {Canvas} from './canvas.js';
 export const fields=['silicon','metal','gateHorizontal','gateVertical','link','siliconConnectedRight','siliconConnectedDown','metalConnectedRight','metalConnectedDown'];
 export function encode(c){return JSON.stringify({format:'kohctpyktop-js',version:1,width:c.width,height:c.height,...Object.fromEntries(fields.map(k=>[k,c[k]]))});}
 export function decode(text){

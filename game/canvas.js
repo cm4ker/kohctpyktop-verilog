@@ -33,7 +33,7 @@ bmpTileJoint = new Array("tile_nj","tile_pj","tile_mj");
 link = null;
 bmpTileCap = new Array("tile_nc","tile_pc","tile_mc");
 constructor(param1, param2) {
-         
+
          this.width = param1;
          this.height = param2;
          this.silicon = Utility.Create2DArray(param1,param2,Canvas.SILICON_NONE);

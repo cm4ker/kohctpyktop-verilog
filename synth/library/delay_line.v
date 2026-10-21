@@ -1,4 +1,4 @@
-﻿module delay_line #(parameter DEPTH=10)(input in, output out);
+module delay_line #(parameter DEPTH=10)(input in, output out);
     generate if (DEPTH == 1) begin
         transistor_n stage(.s(in), .g(in), .d(out));
     end else begin

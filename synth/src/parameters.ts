@@ -1,4 +1,4 @@
-﻿import {Diagnostic} from './parser.ts';
+import {Diagnostic} from './parser.ts';
 import type {IntegerExpression,Module,ModuleBody,Span} from './parser.ts';
 export function integerValue(e:IntegerExpression,values:Map<string,number>,span:Span):number {
  if(e.kind==='integer')return e.value;

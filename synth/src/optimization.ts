@@ -1,4 +1,4 @@
-﻿import type {Netlist,Transistor} from './synthesis.ts';
+import type {Netlist,Transistor} from './synthesis.ts';
 /** Recover compact physical cells from connectivity, never from a module name. */
 export function recognizeCells(net:Netlist):void {
  const used=new Set([...net.porChains,...net.delayLines,...net.rsTriggers].flatMap(c=>c.transistors));

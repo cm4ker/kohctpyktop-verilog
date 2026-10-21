@@ -1,4 +1,4 @@
-﻿// Timing and grading ported from SimulationState and Graph.
+// Timing and grading ported from SimulationState and Graph.
 export function expand(blocks,output=false){return blocks.flatMap(v=>Array.from({length:10},(_,t)=>v===0?false:v===1?true:output&&v===3?t>=2&&t<7:t<5));}
 export function matches(values,pattern){
   let correct=0,counted=0;

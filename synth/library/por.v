@@ -1,4 +1,4 @@
-﻿module por #(parameter DEPTH=10)(output out, output pre_out);
+module por #(parameter DEPTH=10)(output out, output pre_out);
     generate if (DEPTH == 1) begin
         assign pre_out = 1'b1;
         transistor_n stage(.s(1'b1), .g(1'b1), .d(out));
