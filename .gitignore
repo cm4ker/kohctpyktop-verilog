@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.npm-cache/
+logs/
+artifacts/
+test-results/
+playwright-report/
+*.log
+.env
+.env.*
+!.env.example
+*.zip
+*.swf
+**/browser-report.json
+**/preview.png
+.DS_Store
+Thumbs.db
