@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {levels} from '../../game/levels.js';
 import {parse,Diagnostic} from '../src/parser.ts';
 import {synthesize} from '../src/synthesis.ts';
 import {route} from '../src/routing.ts';
@@ -9,6 +11,13 @@ import {Simulation} from '../../game/simulation.js';
 const header='module root(input pin1,pin2,pin3,pin4,pin6,pin7,output pin8);';
 const body='wire [3:0] data={pin1,pin2,pin3,pin4}; wire [1:0] sel={pin7,pin6}; assign pin8=data[sel];';
 const source=header+body+' endmodule';
+test('bundled 4-to-1 example passes the KM141P level with DIP selector pins',()=>{
+ const code=readFileSync(new URL('../examples/mux.v',import.meta.url),'utf8');
+ const net=synthesize(parse(code),{optimize:true}),layout=route(net),board=decode(encode(layout.board));board.mainCanvasLock=true;
+ const level=levels.find(l=>l.id==='KM141P');
+ assert.deepEqual(net.bindings.filter(b=>b.direction==='input').map(b=>b.number),[1,2,3,4,5,6]);
+ const sim=new Simulation(board,level);assert.equal(sim.run(),100);
+});
 async function check(code,expected){
  const net=synthesize(parse(code)),layout=route(net),board=decode(encode(layout.board));board.mainCanvasLock=true;
  const pins=Array.from({length:8},(_,i)=>({name:`P${i}`,output:i===4,blocks:Array.from({length:64},(_,mask)=>(mask>>([0,1,2,3,-1,5,4,-1][i]))&1)}));

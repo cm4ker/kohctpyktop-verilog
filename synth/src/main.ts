@@ -1,3 +1,4 @@
+import muxExample from '../examples/mux.v?raw';
 import {libraryManager} from './library-manager.ts';
 import {parseWithLibrary} from './user-library.ts';
 import {librarySources} from './browser-library.ts';
@@ -62,13 +63,6 @@ module osc(input en, output out);
     delay_line #(.DEPTH(9)) dl1(.in(dl1_in), .out(mid));
     delay_line #(.DEPTH(9)) dl2(.in(mid), .out(dl2_out));
     assign out = en & ~mid;
-endmodule
-`;
-const muxExample=`module root(input pin1, input pin2, input pin3, input pin4,
-            input pin6, input pin7, output pin8);
-    wire [3:0] data = {pin1, pin2, pin3, pin4};
-    wire [1:0] sel = {pin7, pin6};
-    assign pin8 = data[sel];
 endmodule
 `;
 const decoderExample=`module root(input pin2, input pin3,

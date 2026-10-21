@@ -1,6 +1,13 @@
-module root(input pin1, input pin2, input pin3, input pin4,
-            input pin6, input pin7, output pin8);
-    wire [3:0] data = {pin1, pin2, pin3, pin4};
-    wire [1:0] sel = {pin7, pin6};
+module root (
+    input pin1, // A
+    input pin2, // B
+    input pin3, // C
+    input pin4, // D
+    input pin5, // S1
+    input pin6, // S0
+    output pin8 // Z
+);
+    wire [3:0] data = {pin4, pin3, pin2, pin1};
+    wire [1:0] sel = {pin5, pin6};
     assign pin8 = data[sel];
 endmodule
