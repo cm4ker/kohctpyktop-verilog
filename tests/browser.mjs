@@ -12,7 +12,7 @@ try {
  await page.waitForFunction(()=>document.querySelector('#synth-frame').contentDocument.querySelector('.cm-content').textContent.includes('A0'));
  assert.match(await frame.locator('.cm-content').innerText(),/pin1.*A0/);
  await frame.locator('#example').click();await frame.locator('#status.success').waitFor();await frame.locator('#apply').click();
- assert.equal(await page.locator('#synth-dialog').evaluate(e=>e.open),false);
+ await page.locator('#synth-dialog').waitFor({state:'hidden'});
  await page.selectOption('#speed','10000');await page.click('#run');await page.locator('#result.pass').waitFor();
  await page.click('#open-synth');
  const toggles=frame.locator('#library-manager input[type=checkbox]');assert.equal(await toggles.count(),4);for(let i=0;i<4;i++)assert.equal(await toggles.nth(i).isChecked(),false);
