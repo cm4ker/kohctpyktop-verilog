@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>КОНСТРУКТОР — Engineer of the People</title><link rel="stylesheet" href="./game/style.css"></head>
 <body>
-<header><div><span class="eyebrow">ZACHTRONICS / ENGINEER OF THE PEOPLE</span><h1>КОНСТРУКТОР<span class="star">★</span></h1></div><div class="header-actions"><button id="music" aria-pressed="false">♫ Музыка</button><button id="help">Справка <kbd>?</kbd></button></div></header>
+<header><div><span class="eyebrow">ZACHTRONICS / ENGINEER OF THE PEOPLE</span><h1>КОНСТРУКТОР<span class="star">★</span></h1></div><div class="header-actions"><a class="original-link" href="https://www.zachtronics.com/kohctpyktop-engineer-of-the-people/" target="_blank" rel="noopener noreferrer">Оригинал · Zachtronics ↗</a><button id="open-synth">Verilog-синтезатор</button><button id="music" aria-pressed="false">♫ Музыка</button><button id="help">Справка <kbd>?</kbd></button></div></header>
 <main>
 <aside><div class="section-heading"><h2>Производственный план</h2><span id="progress">0 / 19</span></div><nav id="levels" aria-label="Задания"></nav><label class="free-mode"><input id="free" type="checkbox"> Свободный выбор уровней</label><p class="aside-note">Соединяйте кремний и металл.<br>Создавайте логику из транзисторов.</p></aside>
 <section class="workbench">
@@ -25,6 +25,6 @@
 <dialog id="code-dialog"><button class="close" data-close="code-dialog" aria-label="Закрыть">×</button><h2>Код схемы</h2><textarea id="code" rows="12" placeholder="JSON или Flash Base64"></textarea><button id="load-code" class="primary">Загрузить схему</button></dialog>
 <dialog id="confirm-dialog"><h2>Очистить схему?</h2><p>Действие можно отменить кнопкой «Отменить».</p><button id="confirm-clear" class="primary">Очистить</button><button data-close="confirm-dialog">Отмена</button></dialog>
 <dialog id="win-dialog"><button class="close" data-close="win-dialog" aria-label="Закрыть">×</button><h2>Производственный план выполнен!</h2><img src="assets/img_win.png" alt="Поздравление из оригинальной игры" style="width:100%"></dialog>
-<script type="module" src="./game/app.js"></script></body></html>
+<dialog id="synth-dialog"><div class="synth-toolbar"><strong id="synth-level"></strong><button id="new-module">Шаблон текущего уровня</button><button id="close-synth">Вернуться в игру</button></div><iframe id="synth-frame" title="Verilog-синтезатор" src="./synth/index.html"></iframe></dialog><script type="module" src="./game/app.js"></script></body></html>
 
 

@@ -99,8 +99,9 @@ endmodule
 const element=<T extends HTMLElement>(id:string)=>document.getElementById(id) as T;
 const status=element('status'),copy=element<HTMLButtonElement>('copy'),download=element<HTMLButtonElement>('download');
 const board=document.getElementById('board') as unknown as SVGSVGElement;
+let levelId:string|undefined;
 let revision=0,layout:Layout|undefined,legacy='';
-function invalidate(){revision++;layout=undefined;legacy='';copy.disabled=download.disabled=true;board.classList.add('stale');element('metrics').textContent='Нужно пересинтезировать';element('ast').textContent='';element('ir').textContent='';element('netlist').textContent='Исходный код изменён.';element('bindings').textContent='';element('manual').hidden=true;status.className='';status.textContent='Код изменён. Выполните синтез.';}
+function invalidate(){revision++;layout=undefined;legacy='';copy.disabled=download.disabled=true;element<HTMLButtonElement>('apply').disabled=true;board.classList.add('stale');element('metrics').textContent='Нужно пересинтезировать';element('ast').textContent='';element('ir').textContent='';element('netlist').textContent='Исходный код изменён.';element('bindings').textContent='';element('manual').hidden=true;status.className='';status.textContent='Код изменён. Выполните синтез.';}
 let stored:string|null=null;try{stored=localStorage.getItem('kohctpyktop-verilog-source');}catch{}
 const view=new EditorView({parent:element('editor'),doc:stored??example,extensions:[basicSetup,StreamLanguage.define(verilog),syntaxHighlighting(defaultHighlightStyle),EditorView.contentAttributes.of({'aria-label':'Исходный код Verilog'}),EditorView.theme({'&':{height:'300px',fontSize:'14px'},'.cm-scroller':{fontFamily:'Consolas, monospace'},'.cm-content':{padding:'16px 0'},'.cm-gutters':{backgroundColor:'#f0f3f5',border:'none'}}),EditorView.updateListener.of(update=>{if(update.docChanged){invalidate();try{localStorage.setItem('kohctpyktop-verilog-source',update.state.doc.toString());}catch{}}})]});
 async function compile(){
@@ -122,7 +123,7 @@ async function compile(){
     element('netlist').textContent+=netlist.delayLines.map(c=>`\n\n${c.instance}: delay_line, DEPTH=${c.depth}\n${c.input} → ${c.transistors.join(' → ')} → ${c.output}\nЗадержка фронта: ${c.depth} тактов; спад без задержки.`).join('');
     element('netlist').textContent+=netlist.rsTriggers.map(c=>`\n\n${c.instance}: rs_trigger\nR: ${c.r}, S: ${c.s}, Q: ${c.output}\n${c.transistors.join(' / ')}`).join('');
     element('bindings').textContent=netlist.bindings.map(b=>`${b.name} · ${b.direction} · (${b.point.join(', ')})`).join('   /   ');
-    copy.disabled=download.disabled=false;status.className='success';status.textContent='Готово. Схему можно перенести в игру.';
+    copy.disabled=download.disabled=false;element<HTMLButtonElement>('apply').disabled=!levelId;status.className='success';status.textContent='Готово. Схему можно перенести в игру.';
     document.documentElement.dataset.ready='true';
   }catch(error){if(current!==revision)return;status.className='error';if(error instanceof Diagnostic){status.textContent=`Строка ${error.span.line}, столбец ${error.span.column}: ${error.message}`;view.dispatch({selection:{anchor:Math.min(error.span.start,view.state.doc.length)}});}else status.textContent=error instanceof Error?error.message:String(error);}
 }
@@ -141,4 +142,12 @@ element('example-edge').addEventListener('click',()=>{view.dispatch({changes:{fr
 element('example-delay').addEventListener('click',()=>{view.dispatch({changes:{from:0,to:view.state.doc.length,insert:delayExample}});void compile();});
 copy.addEventListener('click',async()=>{if(!layout)return;const code=legacy;try{await navigator.clipboard.writeText(code);status.className='success';status.textContent='Код скопирован. В игре откройте «Сохранение» → «Вставить код».';}catch{element('manual').hidden=false;(element('manual') as HTMLDetailsElement).open=true;const area=element<HTMLTextAreaElement>('export-code');area.value=code;area.focus();area.select();status.textContent='Выделенный код можно скопировать вручную: Ctrl+C.';}});
 download.addEventListener('click',()=>{if(!layout)return;const url=URL.createObjectURL(new Blob([encode(layout.board)+'\n'],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='root.kohctpyktop.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+window.addEventListener('message',event=>{
+ if(event.origin!==location.origin||event.source!==parent||event.data?.type!=='kohctpyktop:level')return;
+ levelId=event.data.levelId;
+ if(typeof event.data.template==='string')view.dispatch({changes:{from:0,to:view.state.doc.length,insert:event.data.template}});
+ element<HTMLButtonElement>('apply').disabled=!layout||!levelId;
+});
+element('apply').addEventListener('click',()=>{if(layout&&levelId)parent.postMessage({type:'kohctpyktop:apply',levelId,board:encode(layout.board)},location.origin);});
+parent.postMessage({type:'kohctpyktop:ready'},location.origin);
 void compile();

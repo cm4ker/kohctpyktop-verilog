@@ -1,4 +1,5 @@
-﻿import {Canvas} from './canvas.js';
+import {moduleTemplate} from '../src/level-template.ts';
+import {Canvas} from './canvas.js';
 import {Editor} from './editor.js';
 import {Simulation} from './simulation.js';
 import {levels} from './levels.js';
@@ -127,3 +128,17 @@ async function start(){
   window.addEventListener('beforeunload',save);document.documentElement.dataset.ready='true';status(storageWarning||'Готово. Выберите материал и рисуйте на плате. Справка — в правом верхнем углу.');requestAnimationFrame(frame);
 }
 start().catch(e=>{status('Ошибка запуска: '+e.message);console.error(e);});
+
+const synthDialog=$('#synth-dialog'),synthFrame=$('#synth-frame');
+function synthContext(template=false){synthFrame.contentWindow.postMessage({type:'kohctpyktop:level',levelId:levels[index].id,template:template?moduleTemplate(levels[index]):undefined},location.origin);}
+$('#open-synth').onclick=()=>{$('#synth-level').textContent=levels[index].id+' · '+levels[index].title;synthDialog.showModal();synthContext();};
+$('#new-module').onclick=()=>synthContext(true);
+$('#close-synth').onclick=()=>synthDialog.close();
+window.addEventListener('message',async event=>{
+ if(event.origin!==location.origin||event.source!==synthFrame.contentWindow)return;
+ if(event.data?.type==='kohctpyktop:ready')synthContext();
+ if(event.data?.type==='kohctpyktop:apply'){
+  if(event.data.levelId!==levels[index].id){status('Уровень изменился. Откройте синтезатор из нужного уровня.');return;}
+  await importText(event.data.board);synthDialog.close();
+ }
+});
